@@ -11,8 +11,27 @@ import android.util.Base64;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
+
+import javax.crypto.Cipher;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
 
 public class MainActivity extends AppCompatActivity {
+    private static final int pswdIterations = 10;
+    private static final int keySize = 128;
+    private static final String cypherInstance = "AES/CBC/PKCS5Padding";
+    private static final String secretKeyInstance = "PBKDF2WithHmacSHA1";
+    private static final String plainText = "sampleText";
+    private static final String AESSalt = "exampleSalt";
+    private static final String initializationVector = "8119745113154120";
 
     private AppCompatImageView imageView1;
     private AppCompatImageView imageView2;
@@ -46,7 +65,8 @@ public class MainActivity extends AppCompatActivity {
 
         // download
         benchmark.newRecord("decryptString");
-        String decryptedBase64 = decryptString(encrypted);
+        String decryptedBase64 = null;
+        decryptedBase64 = decryptString(encrypted);
         benchmark.done();
 
         benchmark.newRecord("decodeBase64");
@@ -64,14 +84,33 @@ public class MainActivity extends AppCompatActivity {
         return BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.length);
     }
 
-    private String decryptString(String str) {
-        // TODO: 14/11/2022 Decryption function
-        return str;
+    private String decryptString(String textToDecrypt){
+        String decryptedString="";
+        try{
+            byte[] encryted_bytes = Base64.decode(textToDecrypt, Base64.DEFAULT);
+            SecretKeySpec skeySpec = new SecretKeySpec(getRaw(plainText, AESSalt), "AES");
+            Cipher cipher = Cipher.getInstance(cypherInstance);
+            cipher.init(Cipher.DECRYPT_MODE, skeySpec, new IvParameterSpec(initializationVector.getBytes()));
+            byte[] decrypted = cipher.doFinal(encryted_bytes);
+            decryptedString = new String(decrypted, "UTF-8");
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
+        return decryptedString;
     }
 
-    private String encryptString(String str) {
-        // TODO: 14/11/2022 Encryption Function
-        return str;
+    private String encryptString(String textToEncrypt){
+        String encryptedString="";
+        try {
+            SecretKeySpec skeySpec = new SecretKeySpec(getRaw(plainText, AESSalt), "AES");
+            Cipher cipher = Cipher.getInstance(cypherInstance);
+            cipher.init(Cipher.ENCRYPT_MODE, skeySpec, new IvParameterSpec(initializationVector.getBytes()));
+            byte[] encrypted = cipher.doFinal(textToEncrypt.getBytes());
+            encryptedString = Base64.encodeToString(encrypted, Base64.DEFAULT);
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
+        return encryptedString;
     }
 
     private Bitmap getBitmapFromImageRes(int res) {
@@ -84,6 +123,19 @@ public class MainActivity extends AppCompatActivity {
         byte[] byteArray = byteStream.toByteArray();
         String baseString = Base64.encodeToString(byteArray,Base64.DEFAULT);
         return baseString;
+    }
+
+    private static byte[] getRaw(String plainText, String salt) {
+        try {
+            SecretKeyFactory factory = SecretKeyFactory.getInstance(secretKeyInstance);
+            KeySpec spec = new PBEKeySpec(plainText.toCharArray(), salt.getBytes(), pswdIterations, keySize);
+            return factory.generateSecret(spec).getEncoded();
+        } catch (InvalidKeySpecException e) {
+            e.printStackTrace();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+        return new byte[0];
     }
 
 }
